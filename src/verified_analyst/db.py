@@ -48,6 +48,33 @@ class QueryResult:
         return f"{len(self.rows)} row(s)\n" + "\n".join(lines) + note
 
 
+_READ_KEYWORDS = {"select", "with", "from", "values", "table", "describe", "show", "summarize", "("}
+
+
+def _leading_keyword(sql: str) -> str:
+    """First token of the SQL after whitespace and comments, lower-cased ('(' for a parenthesised query)."""
+    i, n = 0, len(sql)
+    while i < n:
+        if sql[i].isspace():
+            i += 1
+        elif sql.startswith("--", i):
+            j = sql.find("\n", i)
+            i = n if j < 0 else j + 1
+        elif sql.startswith("/*", i):
+            j = sql.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+        else:
+            break
+    if i >= n:
+        return ""
+    if sql[i] == "(":
+        return "("
+    j = i
+    while j < n and (sql[j].isalnum() or sql[j] == "_"):
+        j += 1
+    return sql[i:j].lower()
+
+
 @dataclass
 class Database:
     data_dir: Path
@@ -77,6 +104,11 @@ class Database:
             raise SQLRejected("send exactly one statement per run_sql call")
         if stmts[0].type != duckdb.StatementType.SELECT:
             raise SQLRejected(f"only SELECT is allowed (got {stmts[0].type.name})")
+        # Some DuckDB versions rewrite PRAGMA into a SELECT internally, so the statement
+        # type alone is not enough: also require the SQL the model wrote to start like a query.
+        first = _leading_keyword(sql)
+        if first not in _READ_KEYWORDS:
+            raise SQLRejected(f"only SELECT queries are allowed (statement starts with {first or 'nothing'!r})")
 
     # -- execution --------------------------------------------------------------
     def run_select(self, sql: str, max_rows: int = MAX_ROWS,

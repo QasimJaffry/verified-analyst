@@ -73,3 +73,22 @@ def test_timeout_cancels_runaway_query(db):
 def test_sql_error_is_distinct_from_rejection(db):
     with pytest.raises(SQLError):
         db.run_select("SELECT nope FROM users")
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT 1", "select 1", "  \n SELECT 1", "-- note\nSELECT 1", "/* a */ /* b */ select 1",
+    "WITH a AS (SELECT 1) SELECT * FROM a", "FROM users", "(SELECT 1)", "VALUES (1)",
+    "DESCRIBE users", "SUMMARIZE users",
+])
+def test_ordinary_queries_still_allowed(sql):
+    from verified_analyst.db import Database
+    Database.validate_select(sql)
+
+
+@pytest.mark.parametrize("sql", [
+    "PRAGMA database_list", "  pragma database_list", "-- sneaky\nPRAGMA database_list", "/* x */PRAGMA table_info('users')",
+])
+def test_pragma_rejected_even_if_the_parser_calls_it_a_select(sql):
+    from verified_analyst.db import Database
+    with pytest.raises((SQLRejected, SQLError)):
+        Database.validate_select(sql)
