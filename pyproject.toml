@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verified-analyst"
+version = "0.1.0"
+description = "A tool-calling SQL analyst agent that cannot state a number its queries did not return, with an oracle-scored eval harness."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Syed Qasim Hassan Jaffry" }]
+dependencies = ["duckdb>=1.0"]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+va = "verified_analyst.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
