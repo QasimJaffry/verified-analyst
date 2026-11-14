@@ -12,6 +12,10 @@ It ships three ways:
 | **Agent + CLI** | a tool-calling analyst that cannot finish until its prose is grounded | `va ask "..."` on a folder of CSVs |
 | **Leaderboard** | the same oracle-scored eval run across many models | answering *"how often does each model invent numbers?"* |
 
+![An invented number is caught, a grounded one passes](docs/catch-a-lie.png)
+
+*Real output of [`examples/catch_a_lie.py`](examples/catch_a_lie.py). The first draft sounds plausible and even names the wrong leader; the checker rejects it because neither figure was ever returned by a query.*
+
 ```mermaid
 flowchart LR
     Q[Question] --> A[Model]
@@ -70,7 +74,9 @@ For each model it reports:
 
 > **No real-model results are published yet.** The first run will be committed under `results/` with its date, versions and data hashes. Nothing on this page is a model's score.
 
-Until then, here is the pipeline run against deterministic reference solvers. This proves the metrics measure what they claim (`va leaderboard --models reference:oracle,reference:self_correct,reference:overconfident,reference:tampered_prose,reference:hallucinate --runs 1`):
+Until then, here is the pipeline run against deterministic reference solvers (scripted, **not real models**). This proves the metrics measure what they claim (`va leaderboard --models reference:oracle,reference:self_correct,reference:overconfident,reference:tampered_prose,reference:hallucinate --runs 1`):
+
+![Leaderboard of scripted reference solvers](docs/leaderboard-reference.png)
 
 | solver | invented a number | answered the unanswerable | correct + grounded | saved by guard |
 |---|---:|---:|---:|---:|

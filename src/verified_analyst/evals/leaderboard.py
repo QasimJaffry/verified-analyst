@@ -115,8 +115,17 @@ def _ci(ci: tuple[float, float] | None) -> str:
     return "" if ci is None else f" ({ci[0]:.0%}–{ci[1]:.0%})"
 
 
+_SCRIPTED_NOTE = ("These rows are scripted reference solvers that show the scoring works "
+                  "(an oracle, a hallucinator, a self-corrector, ...). They are not real models.")
+
+
+def _all_scripted(rows: list[ModelRow]) -> bool:
+    return bool(rows) and all(r.model.startswith("reference:") for r in rows)
+
+
 def render_markdown(rows: list[ModelRow], meta: dict) -> str:
     L = ["# How often does an AI data analyst invent numbers?", "",
+         *([f"> **{_SCRIPTED_NOTE}**", ""] if _all_scripted(rows) else []),
          f"{meta.get('tasks', '?')} tasks × {meta.get('runs_per_task', '?')} runs per model"
          f"{(' · ' + meta['date_utc']) if meta.get('date_utc') else ''}. "
          "Brackets are Wilson 95% confidence intervals.", "",
@@ -157,6 +166,7 @@ td{{padding:10px 8px;border-bottom:1px solid #141b29;vertical-align:middle}}.num
 <body><div class="w"><h1>How often does an AI data analyst invent numbers?</h1>
 <p>{meta.get('tasks', '?')} questions about a synthetic app database × {meta.get('runs_per_task', '?')} runs per model. Scored against
 gold SQL, no LLM judge. Source: <code>verified-analyst</code>.</p>
+{('<p style="color:#ffb74d;font-weight:600">' + _SCRIPTED_NOTE + '</p>') if _all_scripted(rows) else ''}
 <table><tr><th>model</th><th>invented a number (first draft)</th><th>answered the unanswerable</th><th>correct + grounded, with guard</th><th>saved by guard</th><th>median cost/task</th></tr>
 {body}</table></div></body></html>"""
 

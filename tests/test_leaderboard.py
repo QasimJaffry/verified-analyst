@@ -79,3 +79,15 @@ def test_fetch_openrouter_pricing_parses_and_skips_bad_rows():
                      {"id": "b/y", "pricing": {"prompt": "oops"}}, {"id": "c/z", "pricing": {"prompt": "1"}}]}
     out = fetch_openrouter_pricing(["a/x", "b/y"], urlopen=lambda *a, **k: R(json.dumps(body).encode()))
     assert out == {"a/x": (1e-6, 2e-6)}
+
+
+def test_scripted_solver_rows_are_labelled_but_real_models_are_not(db, tasks):
+    from verified_analyst.evals.leaderboard import render_html, render_markdown
+    ref = model_row("reference:oracle", run_eval(db, tasks, reference_factory("oracle")))
+    real = model_row("openai/gpt-x", run_eval(db, tasks, reference_factory("oracle")))
+    meta = {"tasks": len(tasks), "runs_per_task": 1}
+    assert "not real models" in render_markdown([ref], meta)
+    assert "not real models" in render_html([ref], meta)
+    # one real model in the mix means the banner must not appear
+    assert "not real models" not in render_markdown([ref, real], meta)
+    assert "not real models" not in render_html([real], meta)
