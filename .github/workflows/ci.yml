@@ -9,8 +9,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "${{ matrix.python-version }}" }
-      - run: pip install -e ".[dev]"
+      - run: pip install -e ".[dev,mcp]"
       - run: pytest -q
       - run: va data
       - name: Harness gate (oracle must score 100%)
         run: va eval --provider reference:oracle --min-pass 1.0 --quiet
+      - name: Leaderboard pipeline (offline, reference solvers)
+        run: va leaderboard --models reference:oracle,reference:self_correct,reference:hallucinate --runs 1 --quiet --out /tmp/lb

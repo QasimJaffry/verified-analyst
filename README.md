@@ -1,48 +1,108 @@
 # verified-analyst
 
-A tool-calling **SQL analyst agent that is not allowed to state a number its own queries did not return**, plus an **oracle-scored eval harness** that measures how often a model gets there.
+**Your AI assistant can analyze your data. This makes sure it doesn't invent the numbers.**
 
-Ask a question in plain English about a CSV/database; the agent plans, runs read-only SQL (DuckDB), and answers. Before the answer is accepted, a deterministic checker confirms that **every figure in the prose appears in a query result**. If one does not, the answer is bounced back for re-analysis.
+Ask Claude, Cursor or any AI assistant about a spreadsheet and you usually get a confident answer with figures in it. Some of those figures were never calculated: the model pattern-matched them. `verified-analyst` closes that gap with a **deterministic checker**: every number in an answer must trace back to a value a real SQL query returned, or the answer is sent back for re-analysis.
+
+It ships three ways:
+
+| | what it is | for |
+|---|---|---|
+| **MCP server** | `describe_schema`, `run_sql`, `check_answer` tools for any MCP client | making Claude Desktop / Claude Code / Cursor check their own numbers |
+| **Agent + CLI** | a tool-calling analyst that cannot finish until its prose is grounded | `va ask "..."` on a folder of CSVs |
+| **Leaderboard** | the same oracle-scored eval run across many models | answering *"how often does each model invent numbers?"* |
 
 ```mermaid
-flowchart TD
-    Q[Question] --> A[Agent loop]
-    A -- describe_schema / run_sql --> D[(DuckDB, read-only)]
+flowchart LR
+    Q[Question] --> A[Model]
+    A -- run_sql --> D[(DuckDB, read-only)]
     D -- rows --> A
-    A --> F[final_answer]
-    F --> V{Every number in the prose is in a query result?}
-    V -- no, re-analyze --> A
-    V -- yes --> O[Answer + machine-readable value + optional chart spec]
+    A -- draft answer --> V{check_answer:<br/>every number in a result?}
+    V -- "no: 999 was never returned" --> A
+    V -- yes --> O[Answer you can trust]
 ```
 
-## Status (read this first)
-
-| | |
-|---|---|
-| Agent, verifier, SQL guard, charts | implemented and tested (98 tests) |
-| Eval harness (oracle scoring, Wilson CIs, 26 tasks) | implemented and validated against mutant solvers (below) |
-| OpenAI-compatible + Anthropic providers | implemented; wire format tested against a local mock server / fake client |
-| **Results for a real model** | **not published yet.** No numbers here are from a model; run the command below and commit the output under `results/` |
+## Use it from Claude or Cursor (MCP)
 
 ```bash
-pip install -e ".[anthropic]"
-va data                                   # synthetic subscription-app dataset
-export ANTHROPIC_API_KEY=...              # or: VA_API_KEY / VA_BASE_URL / VA_MODEL for any OpenAI-compatible endpoint
-va eval --provider anthropic --runs 5 --out results/$(date +%F)-anthropic
+pip install "verified-analyst[mcp]"
+va data --out ~/va-demo            # optional: a synthetic subscription-app dataset to try it on
 ```
 
-## What is different from the many "chat with your CSV" agents
+Claude Code:
 
-1. **A numeric-claim verifier on the final prose** ([`verify.py`](src/verified_analyst/verify.py)). Not an LLM judge: rounding-, percent- and suffix-aware matching of each number against returned cells. Arithmetic in prose is rejected on purpose, so the agent must `SELECT` the figure it reports.
-2. **Oracle scoring, no LLM judge** ([`scoring.py`](src/verified_analyst/evals/scoring.py)). Expected answers are the result of executing each task's gold SQL. A run passes only if the value is *correct* **and** the prose is *grounded*.
-3. **Tasks the agent should refuse.** 5 of 26 tasks have no valid numeric answer (missing data, or a question too vague to answer). Inventing a number there is a failure.
-4. **The harness is tested against its own mutants.** Reference solvers that are deliberately wrong must fail; a faithful one must pass 100%.
+```bash
+claude mcp add verified-analyst -- va mcp --data /absolute/path/to/your/csv-folder
+```
 
-Related open-source work, for context: `agentic_TRACE` (deterministic tool-routed analysis), `agentic-duckdb-analyst` (self-validating eval harness), and several text-to-SQL agents. This project's narrower claim is the *prose-level* number check plus the refusal-aware oracle eval.
+Claude Desktop / Cursor (`mcpServers` in the client's config file):
+
+```json
+{ "mcpServers": { "verified-analyst": { "command": "va", "args": ["mcp", "--data", "/absolute/path/to/your/csv-folder"] } } }
+```
+
+Every `.csv` in the folder becomes a table. The server tells the assistant to compute figures in SQL and to call `check_answer` on its draft; `check_answer` returns which numbers were never returned by a query in the session:
+
+```json
+{ "grounded": false, "ungrounded": ["999"], "numbers_checked": ["1234", "999"],
+  "note": "These numbers were not returned by any query in this session. Compute them with run_sql ..." }
+```
+
+The data folder is fixed when the server starts, queries are SELECT-only with file access disabled, and the checker calls no model.
+
+## The leaderboard: how often does each model invent numbers?
+
+```bash
+export OPENROUTER_API_KEY=...       # one key, many models
+va data
+va leaderboard --models anthropic/claude-sonnet-4.5,openai/gpt-5-mini,google/gemini-2.5-flash --runs 3
+# model ids: any from openrouter.ai/models
+# -> results/leaderboard/LEADERBOARD.md, leaderboard.json, index.html (+ per-model runs.csv)
+```
+
+For each model it reports:
+
+- **invented a number**: share of runs whose *first* answer stated a figure none of its own queries returned (raw model behaviour, before the guard steps in)
+- **answered the unanswerable**: on questions the data cannot answer, how often it produced a number anyway
+- **correct + grounded**: final answers that match the oracle *and* pass the checker, with the guard on
+- **saved by guard**: runs that invented a number, got bounced back, then passed
+- median **cost** per question (from OpenRouter's price list) and latency
+
+> **No real-model results are published yet.** The first run will be committed under `results/` with its date, versions and data hashes. Nothing on this page is a model's score.
+
+Until then, here is the pipeline run against deterministic reference solvers. This proves the metrics measure what they claim (`va leaderboard --models reference:oracle,reference:self_correct,reference:overconfident,reference:tampered_prose,reference:hallucinate --runs 1`):
+
+| solver | invented a number | answered the unanswerable | correct + grounded | saved by guard |
+|---|---:|---:|---:|---:|
+| `oracle` (always faithful) | 0% | 0% | 100% | 0 |
+| `self_correct` (fudges, then fixes when rejected) | 100% | 0% | 100% | 21 |
+| `overconfident` (answers impossible questions) | 19% | 100% | 81% | 0 |
+| `tampered_prose` (nudges numbers) | 100% | 0% | 19% | 0 |
+| `hallucinate` (never queries) | 100% | 100% | 0% | 0 |
+
+## Use it standalone
+
+```bash
+pip install verified-analyst            # add [anthropic] for the Anthropic provider
+va data                                 # synthetic dataset in ./data
+va ask "Which channel converts best after the trial?" --show-sql --chart-out chart.json
+va eval --provider openrouter --model openai/gpt-5-mini --runs 5 --out results/gpt-5-mini
+```
+
+`chart.json` is a Vega-Lite spec built only from rows the last query returned: the model picks the chart type and columns, never the data points.
+
+## What is different from the many "chat with your CSV" tools
+
+1. **A numeric-claim verifier on the final prose** ([`verify.py`](src/verified_analyst/verify.py)). Not an LLM judge: rounding-, percent- and suffix-aware matching of each number against returned cells. Arithmetic in prose is rejected on purpose, so the figure must be `SELECT`ed.
+2. **Oracle scoring, no LLM judge** ([`scoring.py`](src/verified_analyst/evals/scoring.py)). Expected answers come from executing each task's gold SQL. A run passes only if the value is correct **and** the prose is grounded.
+3. **Questions it should refuse.** 5 of 26 tasks have no valid numeric answer (missing data, or too vague). Inventing a number there is a failure.
+4. **The harness is tested against its own mutants.** Deliberately wrong solvers must fail; a faithful one must pass 100%. CI enforces it.
+
+Related open-source work: several DuckDB/SQL MCP servers give assistants query access, `andon-verify` re-checks numbers in finished reports, and text-to-SQL agents abound. This project's narrower claim is the in-loop, prose-level number check plus a refusal-aware oracle eval and a cross-model leaderboard.
 
 ## Harness validation (no model involved)
 
-Reproduce with `python scripts/harness_table.py`.
+`python scripts/harness_table.py`
 
 | reference solver | answerable passed (of 21) | refusal/clarify passed (of 5) | what it proves |
 |---|---|---|---|
@@ -52,6 +112,7 @@ Reproduce with `python scripts/harness_table.py`.
 | `hallucinate` | 0 | 0 | never queries, invents a number: verifier catches it; also fails refusals |
 | `overconfident` | 21 | 0 | answers vague/impossible questions with a number: scorer catches it |
 | `refuse_all` | 0 | 3 | blanket refusal cannot game the eval (the 2 vague tasks need `needs_clarification`) |
+| `self_correct` | 21 | 5 | a model the guard rescues still gets credit, and is counted as "saved by guard" |
 
 ## How the verifier decides
 
@@ -79,38 +140,30 @@ Limit worth stating plainly: the verifier proves the numbers **came from a query
 - **Dataset:** synthetic subscription mobile app (users, subscriptions, payments), seeded and reproducible. It is synthetic; nothing describes a real app.
 - **Tasks:** 26 in [`evals/tasks.jsonl`](evals/tasks.jsonl): lookup 5, aggregate 6, join 6, time 4, unanswerable 3, ambiguous 2.
 - **Reporting:** pass rate with a Wilson 95% interval, latency as p50/p95 (never the mean), median steps and tokens, unverified-number rate, per-category breakdown, `runs.csv` with every run. Metadata (date, versions, dataset and task hashes) is written next to the numbers.
-- **Scale caveat:** 26 tasks is a small, single-schema set. Wilson intervals are reported precisely because they are wide. Treat results as a pilot, not a leaderboard.
-
-## Use
-
-```bash
-va ask "Which channel converts best after the trial?" --show-sql --chart-out chart.json
-va schema                                  # what the agent sees
-va eval --provider reference:oracle --min-pass 1.0
-```
-
-`chart.json` is a Vega-Lite spec built only from rows the last query returned; the model picks the chart type and columns, never the data points.
+- **Scale caveat:** 26 tasks is a small, single-schema set, so treat the leaderboard as a pilot. Wilson intervals are reported precisely because they are wide.
 
 ## Layout
 
 ```
 src/verified_analyst/
-  agent.py        loop, tools, verification gate
+  agent.py        loop, tools, verification gate (records the first draft before the guard)
   verify.py       numeric-claim extraction + grounding
+  mcp_server.py   MCP tools for Claude / Cursor (core is transport-independent)
   db.py           DuckDB session, SELECT-only guard, schema description
   charts.py       Vega-Lite spec from returned rows
   providers/      anthropic, openai-compatible (stdlib HTTP)
   datagen.py      seeded synthetic dataset
-  evals/          tasks, oracle scoring, stats, runner, reference solvers
+  evals/          tasks, oracle scoring, stats, runner, reference solvers, leaderboard
 evals/tasks.jsonl
-tests/            98 tests
+tests/            108 tests, incl. a real MCP stdio round trip
 ```
 
 ## Limitations
 
-- Verified-by-query is not verified-correct (above).
-- Small integers can be grounded by coincidence because rounding tolerance is real; the oracle eval is the backstop.
-- One schema, one dialect (DuckDB), no cross-turn memory, no write operations.
+- Verified-by-query is not verified-correct: a real cell quoted for the wrong metric passes the checker and is caught only by the oracle eval.
+- Small integers can be grounded by coincidence because rounding tolerance is real.
+- In MCP mode the checker only helps if the assistant calls it; the server's instructions ask it to, but clients decide.
+- One schema and 26 tasks: the leaderboard is a pilot. More schemas and tasks are the next step.
 - Provider code is tested at the wire-format level, not against live APIs in CI.
 
 MIT licensed.

@@ -6,6 +6,8 @@
   hallucinate     never queries, answers with an invented number      -> verifier must fail it
   overconfident   answers every unanswerable/vague task with a number -> scorer must fail it
   refuse_all      declines everything                                 -> must fail all answerable tasks
+  self_correct    first draft has a nudged number; after the guard rejects it, reports faithfully
+                  -> must pass (this is what "saved by the guard" looks like)
 
 If a mutant ever passes an answerable task, the scorer or verifier has a hole.
 """
@@ -19,7 +21,7 @@ from ..db import QueryResult
 from ..providers.base import ToolCall, Turn
 from .tasks import Task
 
-MODES = ("oracle", "wrong_value", "tampered_prose", "hallucinate", "overconfident", "refuse_all")
+MODES = ("oracle", "wrong_value", "tampered_prose", "hallucinate", "overconfident", "refuse_all", "self_correct")
 
 
 def _plain(v: Any) -> Any:
@@ -83,6 +85,9 @@ class ReferenceSolver:
             return Turn(None, [ToolCall("q1", "run_sql", {"query": t.gold_sql})])
 
         value = self._value()
+        rejected = any(m["role"] == "tool" and m["content"].startswith("REJECTED") for m in messages)
+        if mode == "self_correct":
+            mode = "oracle" if rejected else "tampered_prose"
         if mode == "wrong_value":
             wrong = ([] if isinstance(value, list) else (f"{value}_x" if isinstance(value, str) else value + 1))
             return self._final("answered", self._prose(value), wrong)

@@ -40,6 +40,9 @@ class RunRecord:
     latency_s: float
     ungrounded: str
     error: str
+    first_status: str = ""
+    first_draft_ungrounded: str = ""
+    rejections: int = 0
 
 
 def run_eval(db: Database, tasks: list[Task], factory: ProviderFactory, *, runs: int = 1,
@@ -55,7 +58,8 @@ def run_eval(db: Database, tasks: list[Task], factory: ProviderFactory, *, runs:
             rec = RunRecord(t.id, t.category, r, t.expected_status, res.status, sc.passed, sc.correct,
                             sc.grounded, sc.reason, res.steps, len(res.sql), res.usage.input_tokens,
                             res.usage.output_tokens, round(res.latency_s, 3),
-                            "|".join(res.ungrounded), res.error or "")
+                            "|".join(res.ungrounded), res.error or "",
+                            res.first_status or "", "|".join(res.first_draft_ungrounded), res.rejections)
             records.append(rec)
             if progress:
                 progress(f"{'PASS' if rec.passed else 'FAIL'} {t.id} run{r}  {sc.reason}")

@@ -73,6 +73,50 @@ def cmd_eval(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_leaderboard(a: argparse.Namespace) -> int:
+    from .evals.leaderboard import fetch_openrouter_pricing, run_leaderboard
+    from .providers.openai_compat import OpenAICompatProvider
+
+    models = [m.strip() for m in a.models.split(",") if m.strip()]
+    if not models:
+        print("pass --models a,b,c", file=sys.stderr)
+        return 2
+    bad = [m for m in models if m.startswith("reference:") and m.split(":", 1)[1] not in MODES]
+    if bad:
+        print(f"unknown reference mode(s) {bad}; choose from {MODES}", file=sys.stderr)
+        return 2
+
+    def factory_for(model: str):
+        if model.startswith("reference:"):
+            return reference_factory(model.split(":", 1)[1])
+        provider = OpenAICompatProvider(model=model, base_url=a.base_url)
+        return lambda t, g: provider
+
+    pricing = {}
+    real = [m for m in models if not m.startswith("reference:")]
+    if real and not a.no_pricing:
+        try:
+            pricing = fetch_openrouter_pricing(real)
+        except Exception as e:  # pricing is optional; the eval is not
+            print(f"(could not fetch OpenRouter pricing: {type(e).__name__}; costs will show n/a)", file=sys.stderr)
+    db, tasks = Database(a.data), load_tasks(a.tasks)
+    meta = metadata("leaderboard", Path(a.data), Path(a.tasks), a.runs)
+    rows = run_leaderboard(db, tasks, models, factory_for, a.out, runs=a.runs, max_steps=a.max_steps,
+                           pricing=pricing, meta=meta, progress=None if a.quiet else print)
+    print()
+    for r in rows:
+        inv = "n/a" if r.invented_rate is None else f"{r.invented_rate:.0%}"
+        print(f"{r.model:40s} invented {inv:>5}   pass {r.pass_rate:.0%}   saved by guard {r.saved_by_guard}")
+    print(f"\nwrote {a.out}/LEADERBOARD.md, leaderboard.json, index.html")
+    return 0
+
+
+def cmd_mcp(a: argparse.Namespace) -> int:
+    from .mcp_server import build_server
+    build_server(a.data).run()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="va", description="Verified SQL analyst agent + oracle-scored eval")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -99,6 +143,18 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--max-steps", type=int, default=10); e.add_argument("--out", default="results/latest")
     e.add_argument("--min-pass", type=float); e.add_argument("--max-pass", type=float)
     e.add_argument("--quiet", action="store_true"); e.set_defaults(fn=cmd_eval)
+
+    lb = sub.add_parser("leaderboard", help="run the eval for several models and rank them")
+    lb.add_argument("--models", required=True,
+                    help="comma-separated OpenRouter model ids (or reference:<mode> for offline checks)")
+    lb.add_argument("--base-url", help="OpenAI-compatible endpoint (default: VA_BASE_URL or OpenRouter)")
+    lb.add_argument("--data", default="data"); lb.add_argument("--tasks", default="evals/tasks.jsonl")
+    lb.add_argument("--runs", type=int, default=3); lb.add_argument("--max-steps", type=int, default=10)
+    lb.add_argument("--out", default="results/leaderboard"); lb.add_argument("--no-pricing", action="store_true")
+    lb.add_argument("--quiet", action="store_true"); lb.set_defaults(fn=cmd_leaderboard)
+
+    m = sub.add_parser("mcp", help="serve the analyst tools over MCP (stdio) for Claude, Cursor, ...")
+    m.add_argument("--data", default="data"); m.set_defaults(fn=cmd_mcp)
 
     args = ap.parse_args(argv)
     return args.fn(args)

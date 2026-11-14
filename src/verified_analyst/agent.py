@@ -72,6 +72,12 @@ class AgentResult:
     value: Any = None
     verified: bool = False
     ungrounded: list[str] = field(default_factory=list)
+    # What the model did BEFORE the guard intervened: the numbers in its first "answered" draft
+    # that no query returned. This is the raw "invented a number" signal the leaderboard reports;
+    # `ungrounded` above is what survived the guard.
+    first_draft_ungrounded: list[str] = field(default_factory=list)
+    first_status: str | None = None  # status of the first final_answer the model submitted
+    rejections: int = 0              # times the guard bounced an answer back
     chart: dict | None = None
     steps: int = 0
     sql: list[str] = field(default_factory=list)
@@ -151,8 +157,13 @@ def run_agent(question: str, db: Database, provider: Provider, *, max_steps: int
                         messages.append(tool_msg(call, f"ERROR: {e}. Resend final_answer without or with a valid chart."))
                         continue
                 verdict = verify_answer(answer, pool) if status == "answered" else None
+                if res.first_status is None:
+                    res.first_status = status
+                    if verdict is not None and not verdict.ok:
+                        res.first_draft_ungrounded = list(verdict.ungrounded)
                 if verdict and not verdict.ok:
                     verify_failures += 1
+                    res.rejections += 1
                     res.ungrounded = verdict.ungrounded
                     if verify_failures <= max_verify_retries:
                         messages.append(tool_msg(

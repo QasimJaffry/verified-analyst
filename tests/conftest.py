@@ -12,6 +12,13 @@ def data_dir(tmp_path_factory):
     return generate(tmp_path_factory.mktemp("data"), seed=42, n_users=3000)
 
 
+@pytest.fixture(scope="session")
+def tasks():
+    from pathlib import Path
+    from verified_analyst.evals import load_tasks
+    return load_tasks(Path(__file__).parent.parent / "evals" / "tasks.jsonl")
+
+
 @pytest.fixture()
 def db(data_dir):
     return Database(data_dir)
