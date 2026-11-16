@@ -30,7 +30,7 @@ flowchart LR
     D -- rows --> A
     A -- draft answer --> V{check_answer:<br/>every number in a result?}
     V -- "no: 999 was never returned" --> A
-    V -- yes --> O[Answer you can trust]
+    V -- yes --> O[Answer with every number traced]
 ```
 
 ## Use it from Claude or Cursor (MCP)
@@ -68,8 +68,8 @@ The data folder is fixed when the server starts, queries are SELECT-only with fi
 ```bash
 export OPENROUTER_API_KEY=...       # one key, many models
 va data
-va leaderboard --models anthropic/claude-sonnet-4.5,openai/gpt-5-mini,google/gemini-2.5-flash --runs 3
-# model ids: any from openrouter.ai/models
+va leaderboard --models <model-id>,<model-id>,<model-id> --runs 3
+# model ids: any tool-calling model from openrouter.ai/models (ids change often, so copy current ones)
 # -> results/leaderboard/LEADERBOARD.md, leaderboard.json, index.html (+ per-model runs.csv)
 ```
 
@@ -101,7 +101,7 @@ Until then, here is the pipeline run against deterministic reference solvers (sc
 pip install "verified-analyst @ git+https://github.com/QasimJaffry/verified-analyst"   # add [anthropic] for the Anthropic provider
 va data                                 # synthetic dataset in ./data
 va ask "Which channel converts best after the trial?" --show-sql --chart-out chart.json
-va eval --provider openrouter --model openai/gpt-5-mini --runs 5 --out results/gpt-5-mini
+va eval --provider openrouter --model <model-id> --runs 5 --out results/my-model
 ```
 
 `chart.json` is a Vega-Lite spec built only from rows the last query returned: the model picks the chart type and columns, never the data points.
@@ -113,7 +113,7 @@ va eval --provider openrouter --model openai/gpt-5-mini --runs 5 --out results/g
 3. **Questions it should refuse.** 5 of 26 tasks have no valid numeric answer (missing data, or too vague). Inventing a number there is a failure.
 4. **The harness is tested against its own mutants.** Deliberately wrong solvers must fail; a faithful one must pass 100%. CI enforces it.
 
-Related open-source work: several DuckDB/SQL MCP servers give assistants query access, `andon-verify` re-checks numbers in finished reports, and text-to-SQL agents abound. This project's narrower claim is the in-loop, prose-level number check plus a refusal-aware oracle eval and a cross-model leaderboard.
+Related open-source work: several DuckDB/SQL MCP servers give assistants query access, [`andon-verify`](https://github.com/gulmezeren2-byte/andon) re-checks numbers in finished reports, and text-to-SQL agents abound. This project's narrower claim is the in-loop, prose-level number check plus a refusal-aware oracle eval and a cross-model leaderboard.
 
 ## Harness validation (no model involved)
 
@@ -170,7 +170,7 @@ src/verified_analyst/
   datagen.py      seeded synthetic dataset
   evals/          tasks, oracle scoring, stats, runner, reference solvers, leaderboard
 evals/tasks.jsonl
-tests/            108 tests, incl. a real MCP stdio round trip
+tests/            124 tests, incl. a real MCP stdio round trip
 ```
 
 ## Limitations
