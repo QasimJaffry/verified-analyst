@@ -1,6 +1,13 @@
-# verified-analyst
+<h1 align="center">
+  <img src="docs/hero.svg" width="100%" alt="verified-analyst: an AI data analyst that can't invent numbers. A draft with numbers from memory is rejected; a draft with numbers from the SQL result is accepted.">
+</h1>
 
-**Your AI assistant can analyze your data. This makes sure it doesn't invent the numbers.**
+<p align="center">
+  <a href="https://github.com/QasimJaffry/verified-analyst/actions/workflows/ci.yml"><img src="https://github.com/QasimJaffry/verified-analyst/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
+  <img src="https://img.shields.io/badge/tests-124%20passing-brightgreen" alt="124 tests passing">
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10 or newer">
+</p>
 
 Ask Claude, Cursor or any AI assistant about a spreadsheet and you usually get a confident answer with figures in it. Some of those figures were never calculated: the model pattern-matched them. `verified-analyst` closes that gap with a **deterministic checker**: every number in an answer must trace back to a value a real SQL query returned, or the answer is sent back for re-analysis.
 
@@ -29,9 +36,11 @@ flowchart LR
 ## Use it from Claude or Cursor (MCP)
 
 ```bash
-pip install "verified-analyst[mcp]"
+pip install "verified-analyst[mcp] @ git+https://github.com/QasimJaffry/verified-analyst"
 va data --out ~/va-demo            # optional: a synthetic subscription-app dataset to try it on
 ```
+
+*(Not on PyPI yet, so the install comes straight from GitHub.)*
 
 Claude Code:
 
@@ -89,7 +98,7 @@ Until then, here is the pipeline run against deterministic reference solvers (sc
 ## Use it standalone
 
 ```bash
-pip install verified-analyst            # add [anthropic] for the Anthropic provider
+pip install "verified-analyst @ git+https://github.com/QasimJaffry/verified-analyst"   # add [anthropic] for the Anthropic provider
 va data                                 # synthetic dataset in ./data
 va ask "Which channel converts best after the trial?" --show-sql --chart-out chart.json
 va eval --provider openrouter --model openai/gpt-5-mini --runs 5 --out results/gpt-5-mini
