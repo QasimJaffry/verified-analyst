@@ -111,6 +111,27 @@ def cmd_leaderboard(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check(a: argparse.Namespace) -> int:
+    """Stateless check for scripts and agent skills: run the given queries, then verify the answer against them.
+
+    Exit code 0 = every number is grounded, 1 = some are not, 2 = a query was rejected or failed.
+    """
+    from .mcp_server import AnalystSession
+    answer = sys.stdin.read() if a.answer == "-" else a.answer
+    session = AnalystSession(Database(a.data))
+    queries = []
+    for sql in a.sql:
+        out = session.run_sql(sql)
+        failed = out.startswith(("REJECTED:", "ERROR:"))
+        queries.append({"sql": sql, "ok": not failed, "result": out})
+        if failed:
+            print(json.dumps({"grounded": False, "error": out, "queries": queries}, indent=2))
+            return 2
+    verdict = session.check_answer(answer, a.question)
+    print(json.dumps({**verdict, "queries": queries}, indent=2))
+    return 0 if verdict["grounded"] else 1
+
+
 def cmd_mcp(a: argparse.Namespace) -> int:
     from .mcp_server import build_server
     build_server(a.data).run()
@@ -152,6 +173,12 @@ def main(argv: list[str] | None = None) -> int:
     lb.add_argument("--runs", type=int, default=3); lb.add_argument("--max-steps", type=int, default=10)
     lb.add_argument("--out", default="results/leaderboard"); lb.add_argument("--no-pricing", action="store_true")
     lb.add_argument("--quiet", action="store_true"); lb.set_defaults(fn=cmd_leaderboard)
+
+    c = sub.add_parser("check", help="run SQL queries, then check that every number in an answer came from them")
+    c.add_argument("--data", default="data"); c.add_argument("--sql", action="append", required=True,
+                                                             help="a SELECT query; repeat for several")
+    c.add_argument("--answer", required=True, help="the draft answer text, or - to read it from stdin")
+    c.add_argument("--question", default=""); c.set_defaults(fn=cmd_check)
 
     m = sub.add_parser("mcp", help="serve the analyst tools over MCP (stdio) for Claude, Cursor, ...")
     m.add_argument("--data", default="data"); m.set_defaults(fn=cmd_mcp)

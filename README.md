@@ -5,18 +5,19 @@
 <p align="center">
   <a href="https://github.com/QasimJaffry/verified-analyst/actions/workflows/ci.yml"><img src="https://github.com/QasimJaffry/verified-analyst/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
-  <img src="https://img.shields.io/badge/tests-124%20passing-brightgreen" alt="124 tests passing">
+  <img src="https://img.shields.io/badge/tests-129%20passing-brightgreen" alt="129 tests passing">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10 or newer">
 </p>
 
 Ask Claude, Cursor or any AI assistant about a spreadsheet and you usually get a confident answer with figures in it. Some of those figures were never calculated: the model pattern-matched them. `verified-analyst` closes that gap with a **deterministic checker**: every number in an answer must trace back to a value a real SQL query returned, or the answer is sent back for re-analysis.
 
-It ships three ways:
+It ships four ways:
 
 | | what it is | for |
 |---|---|---|
 | **MCP server** | `describe_schema`, `run_sql`, `check_answer` tools for any MCP client | making Claude Desktop / Claude Code / Cursor check their own numbers |
 | **Agent + CLI** | a tool-calling analyst that cannot finish until its prose is grounded | `va ask "..."` on a folder of CSVs |
+| **Agent skill** | a `SKILL.md` that makes a coding agent compute in SQL and run `va check` on its draft | Claude Code, Codex and other agents that load skills, with no MCP setup |
 | **Leaderboard** | the same oracle-scored eval run across many models | answering *"how often does each model invent numbers?"* |
 
 ![An invented number is caught, a grounded one passes](docs/catch-a-lie.png)
@@ -62,6 +63,23 @@ Every `.csv` in the folder becomes a table. The server tells the assistant to co
 ```
 
 The data folder is fixed when the server starts, queries are SELECT-only with file access disabled, and the checker calls no model.
+
+## Use it as an agent skill, or from a script
+
+```bash
+npx skills add QasimJaffry/verified-analyst      # installs skills/verified-numbers
+```
+
+The skill tells the agent to compute each figure in SQL and to run one stateless command on its draft before answering:
+
+```bash
+va check --data ./data \
+  --sql "SELECT platform, COUNT(*) AS users FROM users GROUP BY platform" \
+  --answer "iOS leads with 4,812 users."
+# prints JSON with "ungrounded": ["4,812"] and exits 1
+```
+
+Exit code 0 means every number came from one of the given queries, 1 means some did not, 2 means a query was rejected. That makes it usable in CI or any script, with no model involved.
 
 ## The leaderboard: how often does each model invent numbers?
 
@@ -170,7 +188,8 @@ src/verified_analyst/
   datagen.py      seeded synthetic dataset
   evals/          tasks, oracle scoring, stats, runner, reference solvers, leaderboard
 evals/tasks.jsonl
-tests/            124 tests, incl. a real MCP stdio round trip
+tests/            129 tests, incl. a real MCP stdio round trip
+skills/           verified-numbers agent skill (uses `va check`)
 ```
 
 ## Limitations
