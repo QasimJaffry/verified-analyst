@@ -70,6 +70,15 @@ The data folder is fixed when the server starts, queries are SELECT-only with fi
 npx skills add QasimJaffry/verified-analyst      # installs skills/verified-numbers
 ```
 
+In Claude Code you can also install it as a plugin:
+
+```text
+/plugin marketplace add QasimJaffry/verified-analyst
+/plugin install verified-analyst@verified-analyst
+```
+
+The skill needs the `va` command on the machine. If it is missing, the skill asks before running `pip install "verified-analyst @ git+https://github.com/QasimJaffry/verified-analyst"`.
+
 The skill tells the agent to compute each figure in SQL and to run one stateless command on its draft before answering:
 
 ```bash

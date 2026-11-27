@@ -1,0 +1,8 @@
+{
+  "name": "verified-analyst",
+  "version": "0.2.0",
+  "description": "Makes an agent compute every figure in SQL and check its draft answer, so no number is stated that a query did not return.",
+  "author": { "name": "Syed Qasim Hassan Jaffry" },
+  "homepage": "https://github.com/QasimJaffry/verified-analyst",
+  "license": "MIT"
+}

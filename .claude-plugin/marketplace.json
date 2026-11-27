@@ -1,0 +1,11 @@
+{
+  "name": "verified-analyst",
+  "owner": { "name": "Syed Qasim Hassan Jaffry" },
+  "plugins": [
+    {
+      "name": "verified-analyst",
+      "source": "./",
+      "description": "Agent skill: compute every figure in SQL and run `va check` on the draft answer before sending it."
+    }
+  ]
+}
