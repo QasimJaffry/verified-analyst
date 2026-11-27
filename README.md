@@ -11,6 +11,10 @@
 
 Ask Claude, Cursor or any AI assistant about a spreadsheet and you usually get a confident answer with figures in it. Some of those figures were never calculated: the model pattern-matched them. `verified-analyst` closes that gap with a **deterministic checker**: every number in an answer must trace back to a value a real SQL query returned, or the answer is sent back for re-analysis.
 
+> **A scenario.** You ask an assistant, "How many users do we have on iOS?" and it replies "4,812, up 12% this month." It never ran a calculation. You repeat the figure in a meeting and it is wrong. With `verified-analyst` the assistant must compute each figure with SQL, then pass its draft through `va check`. A number that no query returned makes the check fail, and the assistant has to fix the answer.
+>
+> **Prior art.** Number-grounding checks and text-to-SQL verifiers already exist as research and as libraries. This is a small, tested, installable version with an oracle-scored eval, not the first of its kind.
+
 It ships four ways:
 
 | | what it is | for |
