@@ -1,13 +1,6 @@
-<h1 align="center">
-  <img src="docs/hero.svg" width="100%" alt="verified-analyst: an AI data analyst that can't invent numbers. A draft with numbers from memory is rejected; a draft with numbers from the SQL result is accepted.">
-</h1>
+# verified-analyst
 
-<p align="center">
-  <a href="https://github.com/QasimJaffry/verified-analyst/actions/workflows/ci.yml"><img src="https://github.com/QasimJaffry/verified-analyst/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
-  <img src="https://img.shields.io/badge/tests-129%20passing-brightgreen" alt="129 tests passing">
-  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10 or newer">
-</p>
+<a href="https://github.com/QasimJaffry/verified-analyst/actions/workflows/ci.yml"><img src="https://github.com/QasimJaffry/verified-analyst/actions/workflows/ci.yml/badge.svg" alt="CI status"></a> <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
 
 Ask Claude, Cursor or any AI assistant about a spreadsheet and you usually get a confident answer with figures in it. Some of those figures were never calculated: the model pattern-matched them. `verified-analyst` closes that gap with a **deterministic checker**: every number in an answer must trace back to a value a real SQL query returned, or the answer is sent back for re-analysis.
 
